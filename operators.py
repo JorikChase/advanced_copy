@@ -1,9 +1,10 @@
+# operators.py
 import bpy
 from . import utils
 
 
 class ADVCOPY_OT_copy_to_current_shot(bpy.types.Operator):
-    """Copies object to the collection for the current shot, auto-detecting MODEL/VFX context"""
+    """Copies object to the collection for the current shot, auto-detecting MODEL/VFX/ACTOR/PROP context"""
 
     bl_idname = "object.advcopy_copy_to_current_shot"
     bl_label = "Copy to Current Shot"
@@ -32,9 +33,10 @@ class ADVCOPY_OT_copy_to_current_shot(bpy.types.Operator):
         if original_obj.data:
             new_obj.data = original_obj.data.copy()
         new_obj.animation_data_clear()
-        new_obj.name = (
-            f"{original_obj.name}.{shot_info['scene_str']}.{shot_info['shot_str']}"
-        )
+
+        # Use the new helper function to generate the unique name
+        new_obj.name = utils.generate_new_name(original_obj, target_collection)
+
         target_collection.objects.link(new_obj)
 
         frame_range = (shot_info["start"], shot_info["end"])
@@ -49,7 +51,7 @@ class ADVCOPY_OT_copy_to_current_shot(bpy.types.Operator):
 
 
 class ADVCOPY_OT_copy_to_current_scene(bpy.types.Operator):
-    """Copies object to the current scene's collection, auto-detecting MODEL/VFX context"""
+    """Copies object to the current scene's collection, auto-detecting MODEL/VFX/ACTOR/PROP context"""
 
     bl_idname = "object.advcopy_copy_to_current_scene"
     bl_label = "Copy to Current Scene"
@@ -93,7 +95,9 @@ class ADVCOPY_OT_copy_to_current_scene(bpy.types.Operator):
         if original_obj.data:
             new_obj.data = original_obj.data.copy()
         new_obj.animation_data_clear()
-        new_obj.name = f"{original_obj.name}.{scene_str}"
+
+        # Use the new helper function to generate the unique name
+        new_obj.name = utils.generate_new_name(original_obj, target_collection)
         target_collection.objects.link(new_obj)
 
         utils.toggle_object_visibility(original_obj, frame_range, hide=True)
@@ -107,7 +111,7 @@ class ADVCOPY_OT_copy_to_current_scene(bpy.types.Operator):
 
 
 class ADVCOPY_OT_move_to_all_scenes(bpy.types.Operator):
-    """Creates a copy in every scene's collection and removes original, auto-detecting MODEL/VFX"""
+    """Creates a copy in every scene's collection and removes original, auto-detecting context"""
 
     bl_idname = "object.advcopy_move_to_all_scenes"
     bl_label = "Move Unique Copies to Each Scene"
@@ -143,8 +147,8 @@ class ADVCOPY_OT_move_to_all_scenes(bpy.types.Operator):
             new_obj = original_obj.copy()
             if original_obj.data:
                 new_obj.data = original_obj.data.copy()
-            scene_str = scene_coll.name.strip("+").split("-")[0]
-            new_obj.name = f"{original_obj.name}.{scene_str}"
+            # Use the new helper function to generate the unique name
+            new_obj.name = utils.generate_new_name(original_obj, target_coll)
             target_coll.objects.link(new_obj)
             copies_made += 1
 
@@ -211,16 +215,14 @@ class ADVCOPY_OT_copy_to_env(bpy.types.Operator):
             new_obj = original_obj.copy()
             if original_obj.data:
                 new_obj.data = original_obj.data.copy()
-            try:
-                env_name = env_coll.name.replace(f"-{op_type}", "").replace("ENV-", "")
-                new_obj.name = f"{original_obj.name}.{env_name}"
-            except Exception:
-                new_obj.name = f"{original_obj.name}.ENV_COPY"
+            # Use the new helper function to generate the unique name
+            new_obj.name = utils.generate_new_name(original_obj, env_coll)
 
             env_coll.objects.link(new_obj)
             copies_made += 1
 
         if copies_made > 0:
+            # Unlink the original object instead of removing it from all collections
             source_coll.objects.unlink(original_obj)
             self.report(
                 {"INFO"},
