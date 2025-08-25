@@ -23,13 +23,13 @@ MODEL-SC19-SH200+LOC-<loc_name>+
    <asset_name>-P-SC<id>-<env_name>  [<-here C]
   SHOT-ART-SC19-APOLLO_CRASH
    MODEL-SC19-SH200
-    <asset_name>-P-SC<id>-SH<id>     [<-here D]
+    <asset_name>-P-SC<id>-<env_name>-SH<id>     [<-here D]
 """
 
 bl_info = {
-    "name": "Advanced Copy V4.1",
+    "name": "Advanced Copy V4.2",
     "author": "iori, krutart, Gemini",
-    "version": (4, 1, 0),
+    "version": (4, 2, 0),
     "blender": (4, 5, 0),
     "location": "View3D > Object Context Menu",
     "description": "Automatically performs MODEL, VFX, ACTOR or PROP copy/move operations based on object context and a structured collection hierarchy.",

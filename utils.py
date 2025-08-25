@@ -93,6 +93,26 @@ def get_scene_frame_range(context, scene_str):
 # --- Collection Management Helpers ---
 
 
+def get_env_name_from_scene_collection(scene_coll):
+    """
+    Extracts the environment/local name from a scene collection name.
+    e.g., from '+SC17-APOLLO_CRASH+' it returns 'APOLLO_CRASH'.
+    """
+    if not scene_coll:
+        return None
+    try:
+        # e.g., "+SC17-APOLLO_CRASH+" -> "SC17-APOLLO_CRASH"
+        base_name = scene_coll.name.strip('+')
+        # e.g., "SC17-APOLLO_CRASH" -> ["SC17", "APOLLO_CRASH"]
+        parts = base_name.split('-', 1)
+        if len(parts) > 1:
+            return parts[1]
+    except Exception:
+        # In case of unexpected naming, return None
+        return None
+    return None
+
+
 def get_or_create_collection(parent_collection, child_name):
     """
     Gets a child collection by name from a parent. If it doesn't exist,

@@ -21,6 +21,12 @@ class ADVCOPY_OT_copy_to_current_shot(bpy.types.Operator):
         original_obj = context.active_object
         op_type = utils.get_contextual_op_type(original_obj)
 
+        # Find the top-level scene collection to get the env name for the new object name
+        top_level_scene_coll = utils.find_top_level_scene_collection_by_str(
+            shot_info["scene_str"]
+        )
+        env_name = utils.get_env_name_from_scene_collection(top_level_scene_coll)
+
         target_collection = utils.find_shot_collection(
             context, shot_info["scene_str"], shot_info["shot_str"], op_type
         )
@@ -33,8 +39,11 @@ class ADVCOPY_OT_copy_to_current_shot(bpy.types.Operator):
             new_obj.data = original_obj.data.copy()
         new_obj.animation_data_clear()
 
-        # Append the shot ID to the new object's name as requested
-        new_obj.name = f"{original_obj.name}.{shot_info['shot_str']}"
+        # Append the destination flags to the new object's name
+        if env_name:
+            new_obj.name = f"{original_obj.name}-{shot_info['scene_str']}-{env_name}-{shot_info['shot_str']}"
+        else:
+            new_obj.name = f"{original_obj.name}-{shot_info['scene_str']}-{shot_info['shot_str']}"
 
         target_collection.objects.link(new_obj)
 
@@ -44,7 +53,7 @@ class ADVCOPY_OT_copy_to_current_shot(bpy.types.Operator):
 
         self.report(
             {"INFO"},
-            f"({op_type}) Copied '{original_obj.name}' to shot '{shot_info['name']}'",
+            f"({op_type}) Copied '{original_obj.name}' to shot '{shot_info['name']}' as '{new_obj.name}'",
         )
         return {"FINISHED"}
 
@@ -77,6 +86,8 @@ class ADVCOPY_OT_copy_to_current_scene(bpy.types.Operator):
             )
             return {"CANCELLED"}
 
+        env_name = utils.get_env_name_from_scene_collection(top_level_coll)
+
         target_collection = utils.find_scene_collection(top_level_coll, op_type)
         if not target_collection:
             self.report({"ERROR"}, f"Could not find the scene's {op_type} collection.")
@@ -95,8 +106,11 @@ class ADVCOPY_OT_copy_to_current_scene(bpy.types.Operator):
             new_obj.data = original_obj.data.copy()
         new_obj.animation_data_clear()
 
-        # Append the scene ID to the new object's name
-        new_obj.name = f"{original_obj.name}.{scene_str}"
+        # Append the destination flags to the new object's name
+        if env_name:
+            new_obj.name = f"{original_obj.name}-{scene_str}-{env_name}"
+        else:
+            new_obj.name = f"{original_obj.name}-{scene_str}"
         target_collection.objects.link(new_obj)
 
         utils.toggle_object_visibility(original_obj, frame_range, hide=True)
@@ -104,7 +118,7 @@ class ADVCOPY_OT_copy_to_current_scene(bpy.types.Operator):
 
         self.report(
             {"INFO"},
-            f"({op_type}) Copied '{original_obj.name}' to '{target_collection.name}'",
+            f"({op_type}) Copied '{original_obj.name}' to '{target_collection.name}' as '{new_obj.name}'",
         )
         return {"FINISHED"}
 
@@ -146,8 +160,15 @@ class ADVCOPY_OT_move_to_all_scenes(bpy.types.Operator):
             new_obj = original_obj.copy()
             if original_obj.data:
                 new_obj.data = original_obj.data.copy()
+
             scene_str = scene_coll.name.strip("+").split("-")[0]
-            new_obj.name = f"{original_obj.name}.{scene_str}"
+            env_name = utils.get_env_name_from_scene_collection(scene_coll)
+
+            if env_name:
+                new_obj.name = f"{original_obj.name}-{scene_str}-{env_name}"
+            else:
+                new_obj.name = f"{original_obj.name}-{scene_str}"
+
             target_coll.objects.link(new_obj)
             copies_made += 1
 
@@ -217,9 +238,9 @@ class ADVCOPY_OT_copy_to_env(bpy.types.Operator):
             try:
                 # Add the environment name to the new object's name
                 env_name = env_coll.name.replace(f"-{op_type}", "").replace("ENV-", "")
-                new_obj.name = f"{original_obj.name}.{env_name}"
+                new_obj.name = f"{original_obj.name}-{env_name}"
             except Exception:
-                new_obj.name = f"{original_obj.name}.ENV_COPY"
+                new_obj.name = f"{original_obj.name}-ENV_COPY"
 
             env_coll.objects.link(new_obj)
             copies_made += 1
