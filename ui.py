@@ -10,7 +10,7 @@ class ADVCOPY_MT_scene_menu(bpy.types.Menu):
         layout = self.layout
         # We refer to operators by their bl_idname string, not the class itself.
         layout.operator(
-            operators.ADVCOPY_OT__copy_to_current_scene.bl_idname, icon="SCENE_DATA"
+            operators.ADVCOPY_OT_copy_to_current_scene.bl_idname, icon="SCENE_DATA"
         )
         layout.operator(
             operators.ADVCOPY_OT_move_to_all_scenes.bl_idname, icon="COPY_ID"

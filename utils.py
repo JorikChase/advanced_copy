@@ -113,6 +113,22 @@ def get_env_name_from_scene_collection(scene_coll):
     return None
 
 
+def get_name_from_sub_collection(sub_coll):
+    """
+    Extracts the unique name from a sub-collection like 'MODEL-LOC-LOCATION_NAME'
+    or 'MODEL-ENV-ENV_NAME'.
+    """
+    if not sub_coll:
+        return None
+    try:
+        parts = sub_coll.name.split('-')
+        if len(parts) > 2:
+            return "-".join(parts[2:]) # Joins the rest of the name back together
+    except Exception:
+        return None
+    return None
+
+
 def get_or_create_collection(parent_collection, child_name):
     """
     Gets a child collection by name from a parent. If it doesn't exist,
@@ -262,7 +278,7 @@ def find_shot_collection(context, scene_str, shot_str, op_type):
         # Path: +VFX-SC... -> SHOT-VFX-... -> VFX-SC##-SH###
         vfx_col = get_or_create_collection(top_level_scene_coll, f"+VFX-{base_name}+")
         shot_vfx_col = get_or_create_collection(vfx_col, f"SHOT-VFX-{base_name}")
-        return get_or_create_collection(shot_vfx_col, f"VFX-{scene_str}-{shot_str}")
+        return get_or_create_collection(vfx_col, f"VFX-{scene_str}-{shot_str}")
 
     elif op_type in ["ACTOR", "PROP"]:
         # Path: +ANI-SC... -> SHOT-ANI-... -> [ACTOR/PROP]-SC##-SH###
@@ -304,44 +320,62 @@ def find_scene_collection(top_level_scene_coll, op_type):
     return None
 
 
-def find_source_loc_collection(obj, op_type):
-    """Finds the source `LOC-...-[TYPE]` collection of an object."""
-    suffix = f"-{op_type}"
+def is_in_any_loc_collection(obj):
+    """Checks if the object is in any valid LOC sub-collection."""
     for coll in obj.users_collection:
-        # Check if the collection name matches the LOC pattern
-        if coll.name.endswith(suffix) and coll.name.startswith("LOC-"):
-            # Verify its parent is the main `+LOC-...` collection
-            for parent_coll in bpy.data.collections:
-                if coll.name in parent_coll.children and parent_coll.name.startswith(
-                    "+LOC-"
-                ):
-                    return coll
+        # e.g., MODEL-LOC-LOCATION_NAME
+        parts = coll.name.split('-')
+        if len(parts) >= 3 and parts[1] == 'LOC':
+            # Check if its parent is the top-level +LOC collection
+            parent = find_parent_collection(coll, bpy.data.collections)
+            if parent and parent.name.startswith('+LOC-'):
+                return True
+    return False
+
+def is_in_any_env_collection(obj):
+    """Checks if the object is in any valid ENV sub-collection."""
+    for coll in obj.users_collection:
+        # e.g., MODEL-ENV-ENV_NAME
+        parts = coll.name.split('-')
+        if len(parts) >= 3 and parts[1] == 'ENV':
+            # Check if its parent is the top-level +ENV collection
+            parent = find_parent_collection(coll, bpy.data.collections)
+            if parent and parent.name.startswith('+ENV-'):
+                return True
+    return False
+
+
+def get_object_source_collection(obj):
+    """Gets the specific collection an object belongs to within the addon's structure."""
+    for coll in obj.users_collection:
+        parts = coll.name.split('-')
+        if len(parts) > 1:
+            # Check for LOC, ENV, SCENE, SHOT contexts
+            if is_in_any_loc_collection(obj) or is_in_any_env_collection(obj):
+                 return coll
     return None
 
 
 def find_all_env_collections(op_type):
-    """Finds all `...-ENV-...-[TYPE]` collections inside their `+ENV-...` parents."""
+    """Finds all `[TYPE]-ENV-...` collections inside their `+ENV-...` parents."""
     env_colls = []
     for parent_coll in bpy.data.collections:
         if parent_coll.name.startswith("+ENV-"):
-            # e.g., parent is "+ENV-APOLLO_CRASH+"
-            base_name = parent_coll.name.strip('+') # "ENV-APOLLO_CRASH"
-            expected_coll_name = f"{op_type}-{base_name}" # "MODEL-ENV-APOLLO_CRASH"
-            if expected_coll_name in parent_coll.children:
-                env_colls.append(parent_coll.children[expected_coll_name])
+            for child in parent_coll.children:
+                if child.name.startswith(f"{op_type}-ENV-"):
+                    env_colls.append(child)
     return env_colls
 
 
 def find_env_collection_by_name(env_name, op_type):
-    """Finds a specific `...-ENV-[NAME]` collection by the environment name."""
+    """Finds a specific `[TYPE]-ENV-[NAME]` collection by the environment name."""
     parent_coll_name = f"+ENV-{env_name}+"
     if parent_coll_name not in bpy.data.collections:
         return None
 
     parent_coll = bpy.data.collections[parent_coll_name]
-    base_name = parent_coll.name.strip('+')
 
-    expected_coll_name = f"{op_type}-{base_name}"
+    expected_coll_name = f"{op_type}-ENV-{env_name}"
 
     if expected_coll_name in parent_coll.children:
         return parent_coll.children[expected_coll_name]

@@ -11,10 +11,11 @@ class ADVCOPY_OT_copy_to_current_shot(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return (
-            context.active_object is not None
-            and utils.get_current_shot_info(context) is not None
-        )
+        obj = context.active_object
+        if not obj:
+            return False
+        # Operation is valid if we have a current shot context
+        return utils.get_current_shot_info(context) is not None
 
     def execute(self, context):
         shot_info = utils.get_current_shot_info(context)
@@ -67,10 +68,15 @@ class ADVCOPY_OT_copy_to_current_scene(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return (
-            context.active_object is not None
-            and utils.get_current_shot_info(context) is not None
-        )
+        obj = context.active_object
+        if not obj:
+            return False
+        # This operation is valid if the object is in a LOC or ENV collection,
+        # and there is a current scene to copy to.
+        is_in_loc = utils.is_in_any_loc_collection(obj)
+        is_in_env = utils.is_in_any_env_collection(obj)
+        has_current_scene = utils.get_current_shot_info(context) is not None
+        return (is_in_loc or is_in_env) and has_current_scene
 
     def execute(self, context):
         original_obj = context.active_object
@@ -132,20 +138,20 @@ class ADVCOPY_OT_move_to_all_scenes(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return (
-            context.active_object is not None
-            and len(utils.find_all_scene_collections()) > 0
-        )
+        obj = context.active_object
+        if not obj:
+            return False
+        # This operation is valid if the object is in a LOC or ENV collection,
+        # and there are scene collections to move it to.
+        is_in_loc = utils.is_in_any_loc_collection(obj)
+        is_in_env = utils.is_in_any_env_collection(obj)
+        has_scene_colls = len(utils.find_all_scene_collections()) > 0
+        return (is_in_loc or is_in_env) and has_scene_colls
 
     def execute(self, context):
         original_obj = context.active_object
         op_type = utils.get_contextual_op_type(original_obj)
         scene_collections = utils.find_all_scene_collections()
-        if not scene_collections:
-            self.report(
-                {"WARNING"}, "No top-level scene collections (+SC##-...) found."
-            )
-            return {"CANCELLED"}
 
         copies_made = 0
         for scene_coll in scene_collections:
@@ -197,33 +203,22 @@ class ADVCOPY_OT_move_to_all_envs(bpy.types.Operator):
         if not obj:
             return False
 
-        source_model = utils.find_source_loc_collection(obj, "MODEL")
-        source_vfx = utils.find_source_loc_collection(obj, "VFX")
-
-        if not (source_model or source_vfx):
+        # Must be in a valid LOC collection to be moved
+        if not utils.is_in_any_loc_collection(obj):
             return False
 
-        op_type = "MODEL" if source_model else "VFX"
+        # Must have ENV collections to move to
+        op_type = utils.get_contextual_op_type(obj)
         return len(utils.find_all_env_collections(op_type)) > 0
 
     def execute(self, context):
         original_obj = context.active_object
+        op_type = utils.get_contextual_op_type(original_obj)
 
-        source_model_coll = utils.find_source_loc_collection(original_obj, "MODEL")
-        source_vfx_coll = utils.find_source_loc_collection(original_obj, "VFX")
-
-        if source_model_coll:
-            op_type = "MODEL"
-            source_coll = source_model_coll
-        elif source_vfx_coll:
-            op_type = "VFX"
-            source_coll = source_vfx_coll
-        else:
-            self.report(
-                {"ERROR"},
-                "Source object not in a valid LOC-MODEL or LOC-VFX collection.",
-            )
-            return {"CANCELLED"}
+        source_coll = utils.get_object_source_collection(original_obj)
+        if not source_coll:
+             self.report({"ERROR"}, "Could not determine source collection for the object.")
+             return {"CANCELLED"}
 
         target_env_colls = utils.find_all_env_collections(op_type)
         if not target_env_colls:
@@ -235,18 +230,18 @@ class ADVCOPY_OT_move_to_all_envs(bpy.types.Operator):
             new_obj = original_obj.copy()
             if original_obj.data:
                 new_obj.data = original_obj.data.copy()
-            try:
-                # Add the environment name to the new object's name
-                env_name = env_coll.name.replace(f"{op_type}-ENV-", "")
+
+            env_name = utils.get_name_from_sub_collection(env_coll)
+            if env_name:
                 new_obj.name = f"{original_obj.name}-{env_name}"
-            except Exception:
-                new_obj.name = f"{original_obj.name}-ENV_COPY"
+            else:
+                new_obj.name = f"{original_obj.name}-ENV-COPY"
 
             env_coll.objects.link(new_obj)
             copies_made += 1
 
         if copies_made > 0:
-            # Unlink the original object to perform a "move"
+            # Remove original object to complete the "move"
             bpy.data.objects.remove(original_obj, do_unlink=True)
             self.report(
                 {"INFO"},
@@ -271,10 +266,8 @@ class ADVCOPY_OT_copy_to_current_env(bpy.types.Operator):
         if not obj:
             return False
 
-        # Must be in a LOC collection
-        source_model = utils.find_source_loc_collection(obj, "MODEL")
-        source_vfx = utils.find_source_loc_collection(obj, "VFX")
-        if not (source_model or source_vfx):
+        # Must be in a LOC collection to be copied
+        if not utils.is_in_any_loc_collection(obj):
             return False
 
         # Must have a current scene to derive the current environment
@@ -282,9 +275,7 @@ class ADVCOPY_OT_copy_to_current_env(bpy.types.Operator):
 
     def execute(self, context):
         original_obj = context.active_object
-
-        # Determine Op Type (MODEL/VFX)
-        op_type = "MODEL" if utils.find_source_loc_collection(original_obj, "MODEL") else "VFX"
+        op_type = utils.get_contextual_op_type(original_obj)
 
         # Determine Current Environment from current scene
         shot_info = utils.get_current_shot_info(context)
