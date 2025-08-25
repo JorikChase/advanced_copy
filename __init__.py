@@ -1,4 +1,3 @@
-# __init__.py
 """
 toggle visibility on or off when playhead in the current section (scenes or shots based on collection and camera markers)
 name the copied object with a unique name according to the new collection where it is placed

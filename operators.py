@@ -1,4 +1,3 @@
-# operators.py
 import bpy
 from . import utils
 
@@ -34,8 +33,8 @@ class ADVCOPY_OT_copy_to_current_shot(bpy.types.Operator):
             new_obj.data = original_obj.data.copy()
         new_obj.animation_data_clear()
 
-        # Use the new helper function to generate the unique name
-        new_obj.name = utils.generate_new_name(original_obj, target_collection)
+        # Append the shot ID to the new object's name as requested
+        new_obj.name = f"{original_obj.name}.{shot_info['shot_str']}"
 
         target_collection.objects.link(new_obj)
 
@@ -96,8 +95,8 @@ class ADVCOPY_OT_copy_to_current_scene(bpy.types.Operator):
             new_obj.data = original_obj.data.copy()
         new_obj.animation_data_clear()
 
-        # Use the new helper function to generate the unique name
-        new_obj.name = utils.generate_new_name(original_obj, target_collection)
+        # Append the scene ID to the new object's name
+        new_obj.name = f"{original_obj.name}.{scene_str}"
         target_collection.objects.link(new_obj)
 
         utils.toggle_object_visibility(original_obj, frame_range, hide=True)
@@ -147,8 +146,8 @@ class ADVCOPY_OT_move_to_all_scenes(bpy.types.Operator):
             new_obj = original_obj.copy()
             if original_obj.data:
                 new_obj.data = original_obj.data.copy()
-            # Use the new helper function to generate the unique name
-            new_obj.name = utils.generate_new_name(original_obj, target_coll)
+            scene_str = scene_coll.name.strip("+").split("-")[0]
+            new_obj.name = f"{original_obj.name}.{scene_str}"
             target_coll.objects.link(new_obj)
             copies_made += 1
 
@@ -215,8 +214,12 @@ class ADVCOPY_OT_copy_to_env(bpy.types.Operator):
             new_obj = original_obj.copy()
             if original_obj.data:
                 new_obj.data = original_obj.data.copy()
-            # Use the new helper function to generate the unique name
-            new_obj.name = utils.generate_new_name(original_obj, env_coll)
+            try:
+                # Add the environment name to the new object's name
+                env_name = env_coll.name.replace(f"-{op_type}", "").replace("ENV-", "")
+                new_obj.name = f"{original_obj.name}.{env_name}"
+            except Exception:
+                new_obj.name = f"{original_obj.name}.ENV_COPY"
 
             env_coll.objects.link(new_obj)
             copies_made += 1
