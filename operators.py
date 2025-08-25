@@ -184,11 +184,11 @@ class ADVCOPY_OT_move_to_all_scenes(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class ADVCOPY_OT_copy_to_env(bpy.types.Operator):
-    """Copies object from a LOC collection to all ENV collections, auto-detecting MODEL/VFX"""
+class ADVCOPY_OT_move_to_all_envs(bpy.types.Operator):
+    """Moves object from a LOC collection to all ENV collections, auto-detecting MODEL/VFX"""
 
-    bl_idname = "object.advcopy_copy_to_env"
-    bl_label = "Copy to All Enviros"
+    bl_idname = "object.advcopy_move_to_all_envs"
+    bl_label = "Move to All Enviros"
     bl_options = {"REGISTER", "UNDO"}
 
     @classmethod
@@ -237,7 +237,7 @@ class ADVCOPY_OT_copy_to_env(bpy.types.Operator):
                 new_obj.data = original_obj.data.copy()
             try:
                 # Add the environment name to the new object's name
-                env_name = env_coll.name.replace(f"-{op_type}", "").replace("ENV-", "")
+                env_name = env_coll.name.replace(f"{op_type}-ENV-", "")
                 new_obj.name = f"{original_obj.name}-{env_name}"
             except Exception:
                 new_obj.name = f"{original_obj.name}-ENV_COPY"
@@ -246,15 +246,77 @@ class ADVCOPY_OT_copy_to_env(bpy.types.Operator):
             copies_made += 1
 
         if copies_made > 0:
-            # Unlink the original object instead of removing it from all collections
-            source_coll.objects.unlink(original_obj)
+            # Unlink the original object to perform a "move"
+            bpy.data.objects.remove(original_obj, do_unlink=True)
             self.report(
                 {"INFO"},
-                f"({op_type}) Copied '{original_obj.name}' to {copies_made} ENV collection(s).",
+                f"({op_type}) Moved '{original_obj.name}' to {copies_made} ENV collection(s).",
             )
         else:
             self.report({"ERROR"}, "Failed to create any copies. Original not moved.")
             return {"CANCELLED"}
+        return {"FINISHED"}
+
+
+class ADVCOPY_OT_copy_to_current_env(bpy.types.Operator):
+    """Copies object from a LOC collection to the current ENV collection"""
+
+    bl_idname = "object.advcopy_copy_to_current_env"
+    bl_label = "Copy to Current Enviro"
+    bl_options = {"REGISTER", "UNDO"}
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        if not obj:
+            return False
+
+        # Must be in a LOC collection
+        source_model = utils.find_source_loc_collection(obj, "MODEL")
+        source_vfx = utils.find_source_loc_collection(obj, "VFX")
+        if not (source_model or source_vfx):
+            return False
+
+        # Must have a current scene to derive the current environment
+        return utils.get_current_shot_info(context) is not None
+
+    def execute(self, context):
+        original_obj = context.active_object
+
+        # Determine Op Type (MODEL/VFX)
+        op_type = "MODEL" if utils.find_source_loc_collection(original_obj, "MODEL") else "VFX"
+
+        # Determine Current Environment from current scene
+        shot_info = utils.get_current_shot_info(context)
+        scene_str = shot_info["scene_str"]
+        top_level_scene_coll = utils.find_top_level_scene_collection_by_str(scene_str)
+        if not top_level_scene_coll:
+            self.report({"ERROR"}, f"Could not find scene collection for '{scene_str}' to determine environment.")
+            return {"CANCELLED"}
+
+        env_name = utils.get_env_name_from_scene_collection(top_level_scene_coll)
+        if not env_name:
+            self.report({"ERROR"}, f"Could not extract environment name from '{top_level_scene_coll.name}'.")
+            return {"CANCELLED"}
+
+        # Find the target ENV collection
+        target_env_coll = utils.find_env_collection_by_name(env_name, op_type)
+        if not target_env_coll:
+            self.report({"ERROR"}, f"Could not find target collection for ENV '{env_name}' ({op_type}).")
+            return {"CANCELLED"}
+
+        # Perform the copy
+        new_obj = original_obj.copy()
+        if original_obj.data:
+            new_obj.data = original_obj.data.copy()
+
+        new_obj.name = f"{original_obj.name}-{env_name}"
+        target_env_coll.objects.link(new_obj)
+
+        self.report(
+            {"INFO"},
+            f"({op_type}) Copied '{original_obj.name}' to current ENV '{env_name}' as '{new_obj.name}'.",
+        )
         return {"FINISHED"}
 
 
@@ -264,5 +326,6 @@ classes = (
     ADVCOPY_OT_copy_to_current_shot,
     ADVCOPY_OT_copy_to_current_scene,
     ADVCOPY_OT_move_to_all_scenes,
-    ADVCOPY_OT_copy_to_env,
+    ADVCOPY_OT_move_to_all_envs,
+    ADVCOPY_OT_copy_to_current_env,
 )

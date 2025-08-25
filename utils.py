@@ -320,14 +320,30 @@ def find_source_loc_collection(obj, op_type):
 
 
 def find_all_env_collections(op_type):
-    """Finds all `ENV-...-[TYPE]` collections inside their `+ENV-...` parents."""
-    suffix = f"-{op_type}"
+    """Finds all `...-ENV-...-[TYPE]` collections inside their `+ENV-...` parents."""
     env_colls = []
     for parent_coll in bpy.data.collections:
         if parent_coll.name.startswith("+ENV-"):
-            # Construct the expected child collection name
-            base_name = parent_coll.name.strip("+")
-            expected_coll_name = f"{base_name}{suffix}"
+            # e.g., parent is "+ENV-APOLLO_CRASH+"
+            base_name = parent_coll.name.strip('+') # "ENV-APOLLO_CRASH"
+            expected_coll_name = f"{op_type}-{base_name}" # "MODEL-ENV-APOLLO_CRASH"
             if expected_coll_name in parent_coll.children:
                 env_colls.append(parent_coll.children[expected_coll_name])
     return env_colls
+
+
+def find_env_collection_by_name(env_name, op_type):
+    """Finds a specific `...-ENV-[NAME]` collection by the environment name."""
+    parent_coll_name = f"+ENV-{env_name}+"
+    if parent_coll_name not in bpy.data.collections:
+        return None
+
+    parent_coll = bpy.data.collections[parent_coll_name]
+    base_name = parent_coll.name.strip('+')
+
+    expected_coll_name = f"{op_type}-{base_name}"
+
+    if expected_coll_name in parent_coll.children:
+        return parent_coll.children[expected_coll_name]
+
+    return None
